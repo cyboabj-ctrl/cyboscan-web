@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CyboScan – Factures</title>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root { --lagune:#0B5D63; --fond:#F3F6F6; --encre:#13201F; --gris:#4A5A59; --bord:#DDE3E2; --orange:#9A3412; --vert:#065F46; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--fond); color:var(--encre); font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif; }
+  header { background:#fff; border-bottom:1px solid var(--bord); }
+  .wrap { max-width:1240px; margin:0 auto; padding:16px 28px; }
+  .top { display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between; }
+  .brand { display:flex; gap:12px; align-items:center; }
+  .logo { width:46px; height:46px; border-radius:12px; background:var(--lagune); display:flex; align-items:center; justify-content:center; }
+  .brand b { font-size:24px; display:block; } .brand span { color:var(--gris); font-size:14px; }
+  .tabs { display:flex; gap:6px; background:#EEF2F1; padding:4px; border-radius:12px; }
+  .tabs button { border:0; background:transparent; font-size:15px; font-family:inherit; color:var(--gris); padding:10px 16px; border-radius:9px; cursor:pointer; }
+  .tabs button.on { background:#fff; color:var(--encre); font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .btn { border:1px solid var(--lagune); background:#fff; color:var(--lagune); font-weight:600; font-size:15px; font-family:inherit; padding:10px 15px; border-radius:10px; cursor:pointer; }
+  .btn.plein { background:var(--lagune); color:#fff; }
+  .btn.gris { border-color:#C9D2D0; color:var(--encre); }
+  .btn.rouge { border-color:#E7B9A6; color:var(--orange); }
+  .btn:disabled { opacity:.45; cursor:default; }
+  .barre { background:#fff; border-radius:14px; padding:12px 16px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin:14px 0; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .chip { border:1px solid #C9D2D0; background:#fff; padding:8px 15px; border-radius:999px; font-size:14px; font-weight:600; font-family:inherit; cursor:pointer; color:var(--encre); }
+  .chip.on { background:var(--lagune); color:#fff; border-color:var(--lagune); }
+  h2 { font-size:18px; margin:24px 0 10px; } h2 small { font-weight:400; color:var(--gris); font-size:14px; margin-left:8px; }
+  .grille { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:14px; }
+  .carte { border:2px solid var(--bord); background:#fff; border-radius:12px; padding:8px; cursor:pointer; position:relative; }
+  .carte:hover { border-color:#9FB3B1; }
+  .carte.sel { border-color:var(--lagune); background:#EAF4F3; }
+  .vignette { height:190px; background:#E3E8E7; border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; }
+  .vignette img { max-width:100%; max-height:100%; }
+  .coche { position:absolute; top:6px; left:6px; width:34px; height:34px; z-index:3; display:flex; align-items:center; justify-content:center; }
+  .coche i { width:24px; height:24px; border-radius:7px; border:2px solid #9CA3A1; background:#fff; position:relative; }
+  .carte.sel .coche i { background:var(--lagune); border-color:var(--lagune); }
+  .carte.sel .coche i::after { content:""; position:absolute; left:6px; top:1px; width:6px; height:12px; border:solid #fff; border-width:0 3px 3px 0; transform:rotate(45deg); }
+  .saisie { position:absolute; inset:0; background:#fff; border:1px solid var(--bord); border-radius:8px; padding:40px 12px 10px; display:flex; flex-direction:column; gap:5px; font-size:13px; color:var(--gris); overflow:hidden; }
+  .saisie b { color:var(--encre); font-size:15px; }
+  .saisie .l { display:flex; justify-content:space-between; gap:8px; }
+  .saisie .t { margin-top:auto; border-top:1px solid var(--bord); padding-top:6px; display:flex; justify-content:space-between; font-weight:700; color:var(--lagune); }
+  .tag { position:absolute; top:9px; right:8px; font-size:12px; font-weight:700; padding:4px 8px; border-radius:999px; z-index:2; }
+  .tag.av { background:#FFF4EC; color:var(--orange); } .tag.ok { background:#E7F5EF; color:var(--vert); }
+  .pied { padding:8px 4px 2px; font-size:14px; } .pied div { display:flex; justify-content:space-between; gap:6px; }
+  .pied .v { color:var(--vert); font-size:13px; margin-top:3px; }
+  .vide { text-align:center; color:var(--gris); padding:60px 0; font-size:17px; }
+  table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; }
+  th, td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--bord); font-size:15px; }
+  th { background:#EEF2F1; font-size:14px; color:var(--gris); }
+  input, select { height:42px; border:1px solid #C9D2D0; border-radius:9px; padding:0 10px; font-size:15px; font-family:inherit; width:100%; background:#fff; }
+  label { font-size:13px; font-weight:600; color:var(--gris); display:flex; flex-direction:column; gap:4px; }
+  .login { max-width:380px; margin:80px auto; background:#fff; padding:32px; border-radius:16px; display:flex; flex-direction:column; gap:14px; }
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:20; padding:20px; }
+  .fiche { background:#fff; border-radius:16px; width:min(1100px,100%); max-height:94vh; display:flex; flex-wrap:wrap; overflow:hidden; }
+  .fiche-img { flex:1 1 380px; background:#E3E8E7; overflow:auto; max-height:94vh; display:flex; justify-content:center; align-items:flex-start; padding:10px; }
+  .fiche-img img { width:100%; height:auto; background:#fff; }
+  .fiche form { flex:1 1 380px; padding:22px; display:grid; grid-template-columns:1fr 1fr; gap:12px; align-content:start; overflow:auto; max-height:94vh; }
+  .fiche form .full { grid-column:1 / -1; }
+  .fiche h3 { margin:0; font-size:20px; }
+  .erreur { color:var(--orange); font-size:14px; }
+  .info { color:var(--gris); font-size:13px; }
+  .attente { position:fixed; inset:0; background:rgba(255,255,255,.85); display:flex; align-items:center; justify-content:center; font-size:19px; font-weight:600; z-index:30; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap top">
+    <div class="brand">
+      <div class="logo"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg></div>
+      <div><b>CyboScan</b><span>Coconut Grove Lodge · v1.1</span></div>
+    </div>
+    <div class="tabs" id="tabs" hidden>
+      <button data-tab="traiter" class="on">À traiter</button>
+      <button data-tab="historique">Historique des sorties</button>
+      <button data-tab="fournisseurs">Fournisseurs</button>
+    </div>
+    <button class="btn gris" id="deco" hidden>Se déconnecter</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <form class="login" id="login" hidden>
+    <b style="font-size:20px">Connexion</b>
+    <label>Adresse e-mail<input type="email" id="email" required autocomplete="username"></label>
+    <label>Mot de passe<input type="password" id="mdp" required autocomplete="current-password"></label>
+    <div class="erreur" id="loginErr"></div>
+    <button class="btn plein" type="submit">Se connecter</button>
+  </form>
+
+  <section id="traiter" hidden>
+    <div class="barre">
+      <div class="chips" id="personnes"></div>
+      <div class="chips">
+        <span class="info" id="dossierNom">Dossier : Téléchargements</span>
+        <button class="btn gris" id="choisirDossier">Choisir le dossier</button>
+      </div>
+    </div>
+    <div class="barre">
+      <div class="chips">
+        <button class="btn gris" id="toutSel">Tout sélectionner</button>
+        <span id="compte" class="info"></span>
+      </div>
+      <div class="chips">
+        <button class="btn" id="telecharger" disabled>Télécharger en PDF</button>
+        <button class="btn plein" id="sortir" disabled>Sortir vers Excel (PDF + fichier) puis supprimer</button>
+      </div>
+    </div>
+    <p class="info">Cliquez sur un ticket pour ouvrir sa fiche et le valider. Cochez la case en haut à gauche pour le sélectionner.</p>
+    <div id="liste"></div>
+  </section>
+
+  <section id="historique" hidden>
+    <h2>Historique des sorties</h2>
+    <table><thead><tr><th>Date de sortie</th><th>Jours concernés</th><th>Éléments</th><th>Fichier Excel</th><th>Par</th></tr></thead><tbody id="histo"></tbody></table>
+  </section>
+
+  <section id="fournisseurs" hidden>
+    <h2>Fournisseurs <small>Corrigez un nom : s'il existe déjà, les deux sont fusionnés.</small></h2>
+    <table><thead><tr><th>Nom</th><th>Catégorie habituelle</th><th>Paiement habituel</th><th style="width:250px"></th></tr></thead><tbody id="fourn"></tbody></table>
+  </section>
+</div>
+
+<!-- Fiche de validation -->
+<div class="modal" id="fiche" hidden>
+  <div class="fiche">
+    <div class="fiche-img" id="ficheImg"></div>
+    <form id="ficheForm" autocomplete="off">
+      <div class="full" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <h3 id="ficheTitre">Fiche</h3>
+        <button type="button" class="btn gris" id="ficheFermer">Fermer</button>
+      </div>
+      <div class="full info" id="ficheInfo"></div>
+      <label>Date du ticket<input type="date" name="date" required></label>
+      <label>Type<select name="type"><option>Achat</option><option>Règlement</option></select></label>
+      <label class="full">Fournisseur<input name="fournisseur" list="dlFour" placeholder="Taper pour chercher…"></label>
+      <label>Catégorie<input name="categorie" list="dlCat" required></label>
+      <label>Acheteur<select name="acheteur"></select></label>
+      <label class="full">Désignation<input name="designation" placeholder="Ex. : course, boissons, carburant bateau…"></label>
+      <label>Montant (F)<input name="montant" type="number" min="0" step="1" required></label>
+      <label>Paiement<select name="mode"><option>Espèces</option><option>Chèque</option><option>Mobile</option><option>À terme</option></select></label>
+      <label id="lblCheque">N° chèque<input name="numcheque" inputmode="numeric"></label>
+      <label>Justificatif<select name="justificatif"><option></option><option>FNE</option><option>Ticket reconnu</option><option>Ticket reconnu 2</option><option>Manque FNE</option><option>Aucun</option></select></label>
+      <div class="full erreur" id="ficheErr"></div>
+      <div class="full" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between">
+        <button type="button" class="btn rouge" id="ficheSuppr">Supprimer ce ticket</button>
+        <div style="display:flex;gap:10px">
+          <button type="submit" class="btn" data-suite="0">Valider</button>
+          <button type="submit" class="btn plein" data-suite="1">Valider et suivant</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+<datalist id="dlFour"></datalist>
+<datalist id="dlCat"></datalist>
+<div class="attente" id="attente" hidden>Préparation en cours…</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyAuueskoF8q0SnF6K09GPhCTKkmHMcFO0E",
+  authDomain: "cyboscan-3accd.firebaseapp.com",
+  projectId: "cyboscan-3accd",
+  storageBucket: "cyboscan-3accd.firebasestorage.app",
+  messagingSenderId: "961432988572",
+  appId: "1:961432988572:web:c587dbc8cd4365dd2fb659"
+};
+// Listes reprises du classeur GESTION_CyboScan
+const CATEGORIES = ["Animaux", "Annulé", "Caisse", "Carburant", "Cyril", "Divers", "Entretien", "Hôtel", "Impôts", "Miclo", "Restaurant", "Retrait espèces", "Taxe", "Transport", "Travaux SDB"];
+const FOURNISSEURS_INITIAUX = ["affaire marime", "bernabé", "blessed victor pieces", "bon prix", "Burida", "cabinet veterinaire", "callivoire", "camion", "canal+", "carrefour", "casino", "CDB-CI", "chinamall", "CIE 1000", "CIE 2000", "cimac", "civadis super U", "commande", "comptable tioman lambert", "comptoir du gourmet", "coquivoire", "corlay", "decathlon", "deco gateau", "decogato", "decoria", "depot", "drocolor", "epicerie d'orient", "eucalyptus", "exclusion", "exotica", "faci", "fadco", "feb", "ganamet", "gateaux et du pain", "hyper hayat", "ile boulay business", "ingco", "jumia", "la route des vins", "le gourmet", "librairie de France", "magasin chinois", "makhlouf malick", "mamadou", "marine energies", "maré", "mister bio", "mondiale cycle", "mr yapo", "mtn", "nespresso", "neyala", "oenophile", "orca deco", "papigraph", "phcie bietry", "phcie de la paix", "phcie des lagunes", "phcie galerie", "phcie imann", "phcie langevin", "phcie nda", "phcie pmc", "phcie prima", "phcie roche", "phcie st antoine", "phcie st majeur", "phcie ste marie", "phcie z3", "phcie zone3", "poissonnier", "prestige auto", "promaster", "prosuma casino prima", "prosuma fnac", "prosuma gifi", "prosuma hyper casino", "prosuma hyper hayat", "prosuma nespresso", "prosuma oenophile", "prosuma port bonprix cash z4", "quincaillerie abbi", "retrait appartement", "retrait poissonnier", "sangel", "sap de la mé", "semag matforce", "shell", "socadis", "sodirep", "sofrai", "super budget", "super U HT", "tioman lambert", "yao", "zino"];
+const ACHETEURS = ['Kouka', 'Miclo', 'Cyril', 'Neveu'];
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const prix = (n) => (Number(n) || 0).toLocaleString('fr-FR').replace(/ | /g, ' ') + ' F';
+const JOURS = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+const MOIS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+function libelleJour(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const s = JOURS[new Date(y, m - 1, d).getDay()] + ' ' + d + ' ' + MOIS[m - 1] + ' ' + y;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+const dateFr = (iso) => String(iso || '').split('-').reverse().join('/');
+const cle = (n) => n.trim().toLowerCase().normalize('NFC').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '') || 'sans-nom';
+const jourDe = (it) => (it.validation && it.validation.date) || it.date;
+
+let items = [], sel = new Set(), qui = 'Tous', fourns = [], ficheId = null;
+const urls = new Map();
+let unsub = [];
+
+// ---------- Dossier de destination (Chrome / Edge) ----------
+let dossier = null;
+function idb() {
+  return new Promise((ok, ko) => {
+    const r = indexedDB.open('cyboscan', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error);
+  });
+}
+async function idbGet(k) { const d = await idb(); return new Promise(ok => { const q = d.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => ok(q.result); q.onerror = () => ok(null); }); }
+async function idbSet(k, v) { const d = await idb(); return new Promise(ok => { const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = () => ok(); t.onerror = () => ok(); }); }
+async function chargerDossier() {
+  try { dossier = await idbGet('dossier') || null; } catch (e) { dossier = null; }
+  afficherDossier();
+}
+function afficherDossier() {
+  if (!window.showDirectoryPicker) { $('dossierNom').textContent = 'Dossier : Téléchargements (choix du dossier possible avec Chrome ou Edge)'; $('choisirDossier').hidden = true; return; }
+  $('dossierNom').textContent = 'Dossier : ' + (dossier ? dossier.name : 'Téléchargements');
+}
+$('choisirDossier').onclick = async () => {
+  try { dossier = await window.showDirectoryPicker({ id: 'cyboscan', mode: 'readwrite' }); await idbSet('dossier', dossier); afficherDossier(); }
+  catch (e) { /* annulé */ }
+};
+async function autorise(h) {
+  try {
+    if (await h.queryPermission({ mode: 'readwrite' }) === 'granted') return true;
+    return await h.requestPermission({ mode: 'readwrite' }) === 'granted';
+  } catch (e) { return false; }
+}
+async function enregistrer(nom, blob) {
+  if (dossier && await autorise(dossier)) {
+    const fh = await dossier.getFileHandle(nom, { create: true });
+    const w = await fh.createWritable(); await w.write(blob); await w.close();
+    return;
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nom;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+// ---------- Connexion ----------
+$('login').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('loginErr').textContent = '';
+  try { await auth.signInWithEmailAndPassword($('email').value.trim(), $('mdp').value); }
+  catch (err) { $('loginErr').textContent = 'Connexion refusée : vérifiez l\'adresse et le mot de passe.'; }
+});
+$('deco').onclick = () => auth.signOut();
+
+auth.onAuthStateChanged((u) => {
+  unsub.forEach(f => f()); unsub = [];
+  const connecte = !!u && !u.isAnonymous;
+  $('login').hidden = connecte; $('tabs').hidden = !connecte; $('deco').hidden = !connecte;
+  if (!connecte) { ['traiter','historique','fournisseurs'].forEach(s => $(s).hidden = true); return; }
+  ouvrir('traiter'); chargerDossier(); amorcerFournisseurs();
+  unsub.push(db.collection('factures').onSnapshot(snap => {
+    items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    items.forEach(it => {
+      it.quand = (it.createdAt || it.clientTime)?.toDate?.() || new Date();
+      if (it.type === 'photo' && it.image && !urls.has(it.id)) {
+        urls.set(it.id, URL.createObjectURL(new Blob([it.image.toUint8Array()], { type: 'image/jpeg' })));
+      }
+    });
+    const ids = new Set(items.map(i => i.id));
+    sel = new Set([...sel].filter(id => ids.has(id)));
+    afficher();
+  }, () => { $('liste').innerHTML = '<div class="vide">Accès refusé. Ce compte n\'est pas autorisé.</div>'; }));
+  unsub.push(db.collection('exports').orderBy('at', 'desc').limit(200).onSnapshot(afficherHisto));
+  unsub.push(db.collection('fournisseurs').onSnapshot(afficherFourn));
+});
+
+// Une seule fois : la liste des fournisseurs de GESTION est copiée dans CyboScan.
+async function amorcerFournisseurs() {
+  try {
+    const cfg = db.collection('config').doc('amorcage');
+    if ((await cfg.get()).exists) return;
+    for (let k = 0; k < FOURNISSEURS_INITIAUX.length; k += 400) {
+      const b = db.batch();
+      FOURNISSEURS_INITIAUX.slice(k, k + 400).forEach(n => b.set(db.collection('fournisseurs').doc(cle(n)), { nom: n }, { merge: true }));
+      await b.commit();
+    }
+    await cfg.set({ fait: firebase.firestore.FieldValue.serverTimestamp() });
+  } catch (e) { console.warn('Amorçage fournisseurs :', e.message); }
+}
+
+function ouvrir(t) {
+  ['traiter','historique','fournisseurs'].forEach(s => $(s).hidden = s !== t);
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+}
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => ouvrir(b.dataset.tab));
+
+// ---------- Liste ----------
+function visibles() { return items.filter(i => qui === 'Tous' || i.prenom === qui); }
+function triees(liste) { return liste.slice().sort((a, b) => jourDe(b).localeCompare(jourDe(a)) || b.quand - a.quand); }
+
+function afficher() {
+  const noms = ['Tous', ...[...new Set(items.map(i => i.prenom).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'))];
+  if (!noms.includes(qui)) qui = 'Tous';
+  const nAv = items.filter(i => !i.validation).length;
+  $('personnes').innerHTML = `<span class="info" style="font-weight:600">${items.length} élément(s), dont ${nAv} à valider · Envoyé par :</span>` +
+    noms.map(n => `<button class="chip ${n === qui ? 'on' : ''}" data-qui="${esc(n)}">${esc(n)}</button>`).join('');
+  $('personnes').querySelectorAll('.chip').forEach(b => b.onclick = () => { qui = b.dataset.qui; sel.clear(); afficher(); });
+
+  const vis = visibles();
+  const jours = {};
+  vis.forEach(i => (jours[jourDe(i)] = jours[jourDe(i)] || []).push(i));
+  const cles = Object.keys(jours).sort().reverse();
+  $('liste').innerHTML = !cles.length ? '<div class="vide">Rien à traiter pour le moment.</div>' : cles.map(j => {
+    const liste = jours[j].sort((a, b) => b.quand - a.quand);
+    return `<h2>${libelleJour(j)}<small>${liste.length} élément${liste.length > 1 ? 's' : ''}</small></h2><div class="grille">${liste.map(carte).join('')}</div>`;
+  }).join('');
+  $('liste').querySelectorAll('.carte').forEach(c => c.onclick = (e) => {
+    if (e.target.closest('.coche')) { sel.has(c.dataset.id) ? sel.delete(c.dataset.id) : sel.add(c.dataset.id); afficher(); }
+    else ouvrirFiche(c.dataset.id);
+  });
+  const n = vis.filter(i => sel.has(i.id)).length;
+  $('compte').textContent = n ? `${n} sélectionné${n > 1 ? 's' : ''}` : 'Aucune sélection';
+  $('toutSel').textContent = n && n === vis.length ? 'Tout désélectionner' : 'Tout sélectionner';
+  $('telecharger').disabled = $('sortir').disabled = !n;
+}
+
+function carte(i) {
+  const heure = i.quand.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const v = i.validation;
+  let contenu;
+  if (i.type === 'saisie') {
+    contenu = `<div class="saisie"><b>${esc(i.fournisseur)}</b>
+      ${(i.lignes || []).map(l => `<div class="l"><span>${esc(l.designation)}</span><span>${prix(l.prix)}</span></div>`).join('')}
+      <div class="t"><span>Total</span><span>${prix(i.total)}</span></div></div>`;
+  } else contenu = `<img src="${urls.get(i.id) || ''}" alt="Facture de ${esc(i.prenom)}">`;
+  const tag = v ? '<span class="tag ok">Validé</span>' : `<span class="tag av">${i.type === 'saisie' ? 'Sans ticket · ' : ''}À valider</span>`;
+  return `<div class="carte ${sel.has(i.id) ? 'sel' : ''}" data-id="${i.id}">
+    <div class="vignette"><span class="coche" title="Sélectionner"><i></i></span>${tag}${contenu}</div>
+    <div class="pied"><div><span><b>${heure}</b> · ${esc(i.prenom)}</span><span class="info">${i.type === 'photo' ? Math.round((i.taille || 0) / 1024) + ' Ko' : prix(i.total)}</span></div>
+    ${v ? `<div class="v">${esc(v.fournisseur || v.categorie)} · ${prix(v.montant)} · ${esc(v.mode)}</div>` : ''}</div></div>`;
+}
+
+$('toutSel').onclick = () => {
+  const vis = visibles(); const tous = vis.length && vis.every(i => sel.has(i.id));
+  vis.forEach(i => tous ? sel.delete(i.id) : sel.add(i.id)); afficher();
+};
+
+// ---------- Fiche de validation ----------
+const F = $('ficheForm');
+function remplirListes() {
+  $('dlFour').innerHTML = fourns.map(f => `<option value="${esc(f.nom)}">`).join('');
+  const cats = [...new Set([...CATEGORIES, ...fourns.map(f => f.categorie).filter(Boolean)])].sort((a, b) => a.localeCompare(b, 'fr'));
+  $('dlCat').innerHTML = cats.map(c => `<option value="${esc(c)}">`).join('');
+}
+function majCheque() { $('lblCheque').style.visibility = F.elements.mode.value === 'Chèque' ? 'visible' : 'hidden'; }
+F.elements.mode.onchange = majCheque;
+F.elements.fournisseur.onchange = () => {
+  const f = fourns.find(x => x.nom.toLowerCase() === F.elements.fournisseur.value.trim().toLowerCase());
+  if (!f) return;
+  F.elements.fournisseur.value = f.nom;
+  if (f.categorie && !F.elements.categorie.value) F.elements.categorie.value = f.categorie;
+  if (f.mode) F.elements.mode.value = f.mode;
+  if (f.justificatif && !F.elements.justificatif.value) F.elements.justificatif.value = f.justificatif;
+  majCheque();
+};
+
+function ouvrirFiche(id) {
+  const it = items.find(i => i.id === id); if (!it) return;
+  ficheId = id;
+  const v = it.validation || {};
+  $('ficheTitre').textContent = v.date ? 'Fiche validée (modifiable)' : 'Fiche à valider';
+  const heure = it.quand.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+  $('ficheInfo').textContent = `Envoyé par ${it.prenom || '?'} le ${heure}` + (it.type === 'saisie' ? ' · dépense sans ticket' : '');
+  $('ficheImg').innerHTML = it.type === 'photo'
+    ? `<img src="${urls.get(id)}" alt="Ticket">`
+    : `<div class="saisie" style="position:static;width:100%;padding:16px"><b>${esc(it.fournisseur)}</b>${(it.lignes || []).map(l => `<div class="l"><span>${esc(l.designation)}</span><span>${prix(l.prix)}</span></div>`).join('')}<div class="t"><span>Total</span><span>${prix(it.total)}</span></div></div>`;
+  const acheteurs = [...ACHETEURS];
+  if (it.prenom && !acheteurs.some(a => a.toLowerCase() === it.prenom.toLowerCase())) acheteurs.push(it.prenom);
+  F.elements.acheteur.innerHTML = ['', ...acheteurs].map(a => `<option>${esc(a)}</option>`).join('');
+  const defAch = acheteurs.find(a => a.toLowerCase() === String(it.prenom || '').toLowerCase()) || '';
+  F.elements.date.value = v.date || it.date || '';
+  F.elements.type.value = v.type || 'Achat';
+  F.elements.fournisseur.value = v.fournisseur ?? (it.fournisseur || '');
+  F.elements.categorie.value = v.categorie || '';
+  F.elements.acheteur.value = v.acheteur ?? defAch;
+  F.elements.designation.value = v.designation ?? (it.type === 'saisie' ? (it.lignes || []).map(l => l.designation).join(', ') : '');
+  F.elements.montant.value = v.montant ?? (it.type === 'saisie' ? it.total : '');
+  F.elements.mode.value = v.mode || 'Espèces';
+  F.elements.numcheque.value = v.numcheque || '';
+  F.elements.justificatif.value = v.justificatif || '';
+  if (!v.date && F.elements.fournisseur.value) F.elements.fournisseur.onchange();
+  majCheque();
+  $('ficheErr').textContent = '';
+  $('fiche').hidden = false;
+  (it.type === 'photo' && !v.date ? F.elements.fournisseur : F.elements.categorie).focus();
+}
+$('ficheFermer').onclick = () => { $('fiche').hidden = true; };
+$('fiche').onclick = (e) => { if (e.target.id === 'fiche') $('fiche').hidden = true; };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('fiche').hidden = true; });
+
+let suite = false;
+F.querySelectorAll('button[type=submit]').forEach(b => b.onclick = () => { suite = b.dataset.suite === '1'; });
+F.onsubmit = async (e) => {
+  e.preventDefault();
+  const v = {
+    date: F.elements.date.value, type: F.elements.type.value, fournisseur: F.elements.fournisseur.value.trim(),
+    categorie: F.elements.categorie.value.trim(), acheteur: F.elements.acheteur.value, designation: F.elements.designation.value.trim(),
+    montant: Math.round(Number(F.elements.montant.value) || 0), mode: F.elements.mode.value,
+    numcheque: F.elements.mode.value === 'Chèque' ? F.elements.numcheque.value.trim() : '', justificatif: F.elements.justificatif.value
+  };
+  if (!v.date || !v.categorie || !v.montant) { $('ficheErr').textContent = 'Date, catégorie et montant sont obligatoires.'; return; }
+  try {
+    await db.collection('factures').doc(ficheId).update({ validation: v });
+    if (v.fournisseur) {
+      await db.collection('fournisseurs').doc(cle(v.fournisseur)).set(
+        { nom: v.fournisseur, categorie: v.categorie, mode: v.mode, justificatif: v.justificatif }, { merge: true });
+    }
+  } catch (err) { $('ficheErr').textContent = 'Enregistrement impossible : ' + err.message; return; }
+  if (suite) {
+    const prochain = triees(visibles()).find(i => !i.validation && i.id !== ficheId);
+    if (prochain) { ouvrirFiche(prochain.id); return; }
+  }
+  $('fiche').hidden = true;
+};
+$('ficheSuppr').onclick = async () => {
+  if (!confirm('Supprimer définitivement ce ticket de CyboScan (doublon, erreur…) ?')) return;
+  await db.collection('factures').doc(ficheId).delete();
+  $('fiche').hidden = true;
+};
+
+// ---------- PDF ----------
+function chargerImage(url) { return new Promise((ok, ko) => { const im = new Image(); im.onload = () => ok(im); im.onerror = ko; im.src = url; }); }
+
+async function pdfDuJour(jour, liste) {
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+  const W = 210, H = 297, M = 12;
+  let premiere = true;
+  const photos = liste.filter(i => i.type === 'photo').sort((a, b) => a.quand - b.quand);
+  const saisies = liste.filter(i => i.type === 'saisie').sort((a, b) => a.quand - b.quand);
+  for (const p of photos) {
+    if (!premiere) pdf.addPage(); premiere = false;
+    const v = p.validation;
+    const heure = p.quand.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    pdf.setFontSize(11);
+    pdf.text(`${libelleJour(jour)} - envoyé à ${heure} par ${p.prenom || ''}`, M, M + 3);
+    if (v) pdf.text(`${v.fournisseur || ''} - ${v.categorie} - ${prix(v.montant)} - ${v.mode}`, M, M + 9);
+    const im = await chargerImage(urls.get(p.id));
+    const top = M + 14, maxW = W - 2 * M, maxH = H - top - M;
+    const r = Math.min(maxW / im.width, maxH / im.height);
+    pdf.addImage(im, 'JPEG', M + (maxW - im.width * r) / 2, top, im.width * r, im.height * r);
+  }
+  if (saisies.length) {
+    if (!premiere) pdf.addPage();
+    let y = M + 4, total = 0;
+    pdf.setFontSize(14); pdf.text(`Dépenses sans ticket - ${libelleJour(jour)}`, M, y); y += 10; pdf.setFontSize(11);
+    for (const s of saisies) {
+      if (y > H - 40) { pdf.addPage(); y = M + 4; }
+      pdf.setFont(undefined, 'bold'); pdf.text(`${s.fournisseur} (${s.prenom || ''})`, M, y); y += 6; pdf.setFont(undefined, 'normal');
+      for (const l of (s.lignes || [])) {
+        if (y > H - 20) { pdf.addPage(); y = M + 4; }
+        pdf.text(String(l.designation || ''), M + 4, y); pdf.text(prix(l.prix), W - M, y, { align: 'right' }); y += 6;
+      }
+      pdf.setFont(undefined, 'bold'); pdf.text('Total', M + 4, y); pdf.text(prix(s.total), W - M, y, { align: 'right' }); pdf.setFont(undefined, 'normal');
+      total += Number(s.total) || 0; y += 9;
+    }
+    pdf.setLineWidth(0.3); pdf.line(M, y - 4, W - M, y - 4); pdf.setFont(undefined, 'bold');
+    pdf.text('Total des dépenses sans ticket', M, y + 2); pdf.text(prix(total), W - M, y + 2, { align: 'right' });
+  }
+  await enregistrer(`Factures_${jour}.pdf`, pdf.output('blob'));
+}
+
+async function pdfs(choix) {
+  const jours = {};
+  choix.forEach(i => (jours[jourDe(i)] = jours[jourDe(i)] || []).push(i));
+  const cles = Object.keys(jours).sort();
+  for (const j of cles) { await pdfDuJour(j, jours[j]); await new Promise(r => setTimeout(r, 300)); }
+  return cles;
+}
+
+// ---------- Fichier pour Excel ----------
+const propre = (s) => String(s ?? '').replace(/[;\r\n]+/g, ' ').trim();
+function csv(choix) {
+  const t = ['Réf;Date;Type;Catégorie;Fournisseur;Acheteur;Désignation;Espèces;Chèque;Mobile;À terme;N° chèque;Justificatif'];
+  for (const i of choix) {
+    const v = i.validation, m = v.montant;
+    t.push([i.id, v.date, v.type, v.categorie, v.fournisseur, v.acheteur, v.designation,
+      v.mode === 'Espèces' ? m : '', v.mode === 'Chèque' ? m : '', v.mode === 'Mobile' ? m : '', v.mode === 'À terme' ? m : '',
+      v.numcheque, v.justificatif].map(propre).join(';'));
+  }
+  return new Blob(['﻿' + t.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+}
+
+$('telecharger').onclick = async () => {
+  const choix = visibles().filter(i => sel.has(i.id)); if (!choix.length) return;
+  $('attente').hidden = false;
+  try { await pdfs(choix); } catch (e) { alert('Erreur : ' + e.message); } finally { $('attente').hidden = true; }
+};
+
+$('sortir').onclick = async () => {
+  const choisis = visibles().filter(i => sel.has(i.id));
+  const choix = choisis.filter(i => i.validation);
+  const nonVal = choisis.length - choix.length;
+  if (!choix.length) { alert('Aucun des éléments sélectionnés n\'est validé. Ouvrez leur fiche et validez-les d\'abord.'); return; }
+  if (!confirm(`${choix.length} élément(s) validé(s) vont être enregistrés (PDF + fichier pour Excel) puis supprimés de CyboScan.` +
+    (nonVal ? `\n${nonVal} élément(s) non validé(s) restent dans la liste.` : '') + '\n\nContinuer ?')) return;
+  $('attente').hidden = false;
+  try {
+    const jours = await pdfs(choix);
+    const now = new Date(), p2 = (n) => String(n).padStart(2, '0');
+    const nom = `CyboScan_${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}_${p2(now.getHours())}${p2(now.getMinutes())}${p2(now.getSeconds())}.csv`;
+    await enregistrer(nom, csv(choix));
+    for (let k = 0; k < choix.length; k += 400) {
+      const b = db.batch(); choix.slice(k, k + 400).forEach(i => b.delete(db.collection('factures').doc(i.id))); await b.commit();
+    }
+    await db.collection('exports').add({ at: firebase.firestore.FieldValue.serverTimestamp(), jours, nombre: choix.length, fichier: nom, par: auth.currentUser.email });
+    choix.forEach(i => { if (urls.has(i.id)) { URL.revokeObjectURL(urls.get(i.id)); urls.delete(i.id); } sel.delete(i.id); });
+  } catch (e) { alert('Une erreur est survenue : ' + e.message + '\nRien n\'a été supprimé si les fichiers n\'ont pas pu être enregistrés.'); }
+  finally { $('attente').hidden = true; }
+};
+
+// ---------- Historique ----------
+function afficherHisto(snap) {
+  $('histo').innerHTML = snap.empty ? '<tr><td colspan="5" class="info">Aucune sortie pour le moment.</td></tr>' :
+    snap.docs.map(d => {
+      const x = d.data();
+      const quand = x.at ? x.at.toDate().toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '…';
+      return `<tr><td>${quand}</td><td>${(x.jours || []).map(dateFr).join(', ')}</td><td>${x.nombre || 0}</td><td>${esc(x.fichier || '')}</td><td>${esc(x.par)}</td></tr>`;
+    }).join('');
+}
+
+// ---------- Fournisseurs ----------
+function afficherFourn(snap) {
+  fourns = snap.docs.map(d => ({ id: d.id, ...d.data(), nom: d.data().nom || '' })).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+  remplirListes();
+  $('fourn').innerHTML = fourns.length ? fourns.map(f => `<tr data-id="${esc(f.id)}" data-nom="${esc(f.nom)}">
+      <td><input type="text" value="${esc(f.nom)}" aria-label="Nom du fournisseur"></td>
+      <td>${esc(f.categorie || '')}</td><td>${esc(f.mode || '')}</td>
+      <td><button class="btn" data-act="ren">Enregistrer</button> <button class="btn gris" data-act="sup">Supprimer</button></td></tr>`).join('')
+    : '<tr><td colspan="4" class="info">Aucun fournisseur pour le moment.</td></tr>';
+  $('fourn').querySelectorAll('button').forEach(b => b.onclick = async () => {
+    const tr = b.closest('tr'); const ancien = tr.dataset.nom; const id = tr.dataset.id;
+    try {
+      if (b.dataset.act === 'sup') {
+        if (confirm(`Supprimer « ${ancien} » de la liste ?`)) await db.collection('fournisseurs').doc(id).delete();
+        return;
+      }
+      const nouveau = tr.querySelector('input').value.trim();
+      if (!nouveau || nouveau === ancien) return;
+      const f = fourns.find(x => x.id === id) || {};
+      const nid = cle(nouveau);
+      const reste = { nom: nouveau }; ['categorie', 'mode', 'justificatif'].forEach(k => { if (f[k]) reste[k] = f[k]; });
+      if (nid !== id) await db.collection('fournisseurs').doc(id).delete();
+      await db.collection('fournisseurs').doc(nid).set(reste, { merge: true });
+      const b2 = db.batch();
+      (await db.collection('factures').where('fournisseur', '==', ancien).get()).docs.forEach(d => b2.update(d.ref, { fournisseur: nouveau }));
+      (await db.collection('factures').where('validation.fournisseur', '==', ancien).get()).docs.forEach(d => b2.update(d.ref, { 'validation.fournisseur': nouveau }));
+      await b2.commit();
+    } catch (e) { alert('Modification impossible : ' + e.message); }
+  });
+}
+</script>
+</body>
+</html>
